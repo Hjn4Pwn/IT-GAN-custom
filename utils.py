@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 from scipy.ndimage.interpolation import rotate as scipyrotate
 from networks import MLP, ConvNet, LeNet, AlexNet, AlexNetBN, VGG11, VGG11BN, ResNet18, ResNet18BN_AP, ResNet18BN
+from PIL import Image
 
 def get_dataset(dataset, data_path):
     if dataset == 'MNIST':
@@ -120,10 +121,13 @@ def get_default_convnet_setting():
     return net_width, net_depth, net_act, net_norm, net_pooling
 
 
-
-def get_network(model, channel, num_classes, im_size=(32, 32)):
+def get_network(model, channel, num_classes, net_width=None, net_depth=None, net_act=None, net_norm=None, net_pooling=None, im_size=(32, 32)):
+# def get_network(model, channel, num_classes, im_size=(32, 32)):
     torch.random.manual_seed(int(time.time() * 1000) % 100000)
-    net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting()
+
+    if net_width is None or net_depth is None or net_act is None or net_norm is None or net_pooling is None:
+        net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting()
+    # net_width, net_depth, net_act, net_norm, net_pooling = get_default_convnet_setting()
 
     if model == 'MLP':
         net = MLP(channel=channel, num_classes=num_classes)
@@ -766,6 +770,46 @@ def get_pretrained_networks(net_mode, root_path, dataset, model, acc_net_min, ac
         exit('unknown net_mode: %s' % net_mode)
 
     return networks
+
+# define save_image
+def save_image(img_tensor, file_path, nrow=8):
+    """
+    Lưu tensor ảnh vào đường dẫn file được chỉ định.
+
+    Parameters:
+    img_tensor (Tensor): Tensor hình ảnh cần lưu, kích thước (B, C, H, W).
+    file_path (str): Đường dẫn file để lưu ảnh.
+    nrow (int): Số lượng ảnh trên mỗi hàng.
+    """
+    # Kiểm tra kích thước tensor
+    if img_tensor.dim() == 4 and img_tensor.shape[1] == 3:  # B, C, H, W
+        img_tensor = img_tensor.cpu().numpy().transpose((0, 2, 3, 1))  # Chuyển sang B, H, W, C
+    elif img_tensor.dim() == 3 and img_tensor.shape[0] == 3:  # C, H, W
+        img_tensor = np.expand_dims(img_tensor.cpu().numpy().transpose((1, 2, 0)), axis=0)  # Chuyển sang 1, H, W, C
+    else:
+        raise ValueError("Tensor không đúng định dạng (C, H, W) hoặc (B, C, H, W) với C=3.")
+
+    # Tính toán kích thước ảnh tổng hợp
+    B, H, W, C = img_tensor.shape
+    ncols = nrow
+    nrows = B // ncols + int(B % ncols > 0)
+    
+    # Tạo ảnh tổng hợp
+    grid_img = np.zeros((H * nrows, W * ncols, C), dtype=np.uint8)
+    for i, img in enumerate(img_tensor):
+        row = i // ncols
+        col = i % ncols
+        grid_img[row*H:(row+1)*H, col*W:(col+1)*W, :] = np.clip(img * 255, 0, 255).astype(np.uint8)
+
+    # Lưu ảnh
+    grid_img_pil = Image.fromarray(grid_img)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)  # Tạo thư mục nếu chưa tồn tại
+    grid_img_pil.save(file_path)
+
+# Ví dụ sử dụng
+# Giả sử imgs_vis là tensor hình ảnh bạn muốn lưu, đã chuẩn hóa ngược
+# save_image(imgs_vis, "path/to/save/image.png", nrow=8)
+
 
 def save_image_tensor(imgs, mean, std, save_name, nprow):
     imgs_vis = copy.deepcopy(imgs.detach().cpu())
